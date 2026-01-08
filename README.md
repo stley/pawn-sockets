@@ -1,13 +1,7 @@
- open.mp Pawn Component Template
+ open.mp Socket Component
 =================================
 
-This is a simple component start point template.  It demonstrates how to declare pawn functions using the *pawn-natives* derived syntax (old methods are still available) and add per-player data managed by the server.
-
-## UID
-
-Since this is a template, i.e. a start point for new components, it needs a Unique ID adding.  Don't forget to get a new one from here:
-
-https://open.mp/uid
+This is a simple socket component, based on basic template for components.
 
 ## Required Tools
 
