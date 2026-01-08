@@ -12,23 +12,6 @@ This is a simple socket component, based on basic template for components.
 
 Visual Studio needs the `Desktop development with C++` workload with the `MSVC v142`, `Windows 10 SDK`, and `C++ Clang tools for Windows` components.
 
-## Sources
-
-```bash
-# With HTTPS:
-git clone --recursive https://github.com/openmultiplayer/basic-template
-# With SSH:
-git clone --recursive git@github.com:openmultiplayer/basic-template
-```
-
-Note the use of the `--recursive` argument, because this repository contains submodules.  A useful setting when cloning recursive repos is:
-
-```bash
-git config --global url."git@github.com:".insteadOf "https://github.com/"
-```
-
-Which allows you to push `https://` repos you have permissions on.
-
 ## Building on Windows
 
 ```bash
