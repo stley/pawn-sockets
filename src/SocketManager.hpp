@@ -17,16 +17,16 @@ using SocketHandle = uint32_t;
 
 
 struct ProcessedMessage {
-    size_t recvLen;
+    size_t recvLen = -1;
     std::string fromIp;
-    uint16_t fromPort;
+    uint16_t fromPort = -1;
     char buffer[3072];
 
 };
 
 struct QueuedResponse {
-    int pawn_socket_origin;
-    AMX* machine;
+    int pawn_socket_origin = -1;
+    AMX* machine = nullptr;
     std::string callback;
     ProcessedMessage result;
     bool processed = false;
