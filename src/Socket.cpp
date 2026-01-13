@@ -185,23 +185,20 @@ int Socket::SendTo(const void* data, size_t size, const std::string& ip, uint16_
 int Socket::RecvFrom(void* buffer, size_t size, std::string& outIp, uint16_t& outPort){
     if(!isValidSocket(handle_)) return -1;
 
-    SOCKADDR Recipient;
+    sockaddr_in Recipient;
 
     socklen_t theLen = sizeof(Recipient);
 
-    int ret_val = ::recvfrom(handle_, reinterpret_cast<char*>(buffer), size, 0, &Recipient, &theLen);
+    int ret_val = ::recvfrom(handle_, reinterpret_cast<char*>(buffer), size, 0, reinterpret_cast<SOCKADDR*>(&Recipient), &theLen);
     
     if(ret_val == SOCKET_ERROR){
         state_ = SocketState::Error;
         last_error = GetSocketError();
     }
-
-
-    //sockaddr_in receivedFrom = reinterpret_cast<sockaddr_in>(Recipient);
     
     char IpOutput[17];
 
-    ::inet_ntop(AF_INET, &Recipient, IpOutput, sizeof(IpOutput));
+    ::inet_ntop(AF_INET, &Recipient.sin_addr, IpOutput, sizeof(IpOutput));
 
     outIp = IpOutput;
 

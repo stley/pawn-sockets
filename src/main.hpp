@@ -15,7 +15,7 @@
 
 
 
-ICore* core_ = nullptr;
+extern ICore* core_;
 
 std::vector<AMX*> g_amxScripts;
 

@@ -159,13 +159,13 @@ void SocketManager::dispatch(){
 
         
         switch(theSocket->protocol()){
-        case 1: { //UDP 
+        case 1: 
+            { //UDP 
                 for(int scr = 0; scr < g_amxScripts.size(); scr++)
                 {
                     cell
                         arr_addr,
-                        str_addr,
-                        *phys_addr    
+                        str_addr   
                     ;
                     AMX* theScript = g_amxScripts[scr];
                     if(theScript == nullptr) continue;
@@ -175,6 +175,7 @@ void SocketManager::dispatch(){
                         amx_FindPublic(theScript, response->callback.c_str(), &callIdx);
 
 
+                    //forward OnIncomingUDP(Socket:id, const data[], data_len, const remote_client_ip[], remote_client_port);
                     amx_Push(theScript, (cell)response->result.fromPort);
                     amx_PushString(theScript, &str_addr, NULL, response->result.fromIp.c_str(), NULL, NULL);
                     amx_Push(theScript, (cell)response->result.recvLen);
@@ -192,8 +193,7 @@ void SocketManager::dispatch(){
                 for(int scr = 0; scr < g_amxScripts.size(); scr++)
                 {
                     cell
-                        arr_addr,
-                        *phys_addr
+                        arr_addr
                     ;
                     AMX* theScript = g_amxScripts[scr];
                     if(theScript == nullptr) continue;
@@ -201,11 +201,15 @@ void SocketManager::dispatch(){
                         amx_FindPublic(theScript, "OnIncomingTCP", &callIdx);
                     else
                         amx_FindPublic(theScript, response->callback.c_str(), &callIdx);
-
+            
+                    //forward OnIncomingTCP(Socket:id, const data[], data_len);
+                    //data_len
                     amx_Push(theScript, (cell)response->result.recvLen);
 
+                    //data[]
                     ::amx_PushArray(theScript, &arr_addr, NULL, amx_buffer, sizeof(amx_buffer) / sizeof(cell));
 
+                    //Socket:id (handle)
                     amx_Push(theScript, pawnHandle);
 
                     amx_Exec(theScript, NULL, callIdx);

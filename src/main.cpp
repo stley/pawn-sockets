@@ -11,6 +11,8 @@
 #include "core.hpp"
 
 
+ICore* core_ = nullptr;
+
 std::unique_ptr<SocketManager> socket_manager;
 
 using namespace Impl;
@@ -63,7 +65,7 @@ SCRIPT_API(socket_sendto, int(int socket_handle, string const& ip, int port, str
     core_->printLn("data size: %d", data.size());
     core_->printLn("data capacity: %d", data.capacity());
 
-    for(int i = 0; i < data.size()+1; i++){
+    for(int i = 0; i < data.size(); i++){
         core_->printLn("%02x - %d - %c", data[i], data[i], data[i]);
     }
 
@@ -74,26 +76,15 @@ SCRIPT_API(socket_sendto, int(int socket_handle, string const& ip, int port, str
     return socket_ret;
 }
 
-/*SCRIPT_API(socket_send_array, int(int socket_handle, DynamicArray<char>& data, size_t size)){
-    Socket* sock = socket_manager->get(socket_handle);
-    if(sock == nullptr) return -1;
-
-    return Send
-}*/
-
-
-
-
 SCRIPT_API(is_socket_valid, bool(int socket_handle)){
     Socket* sock = socket_manager->get(socket_handle);
     if(sock == nullptr) return false;
     else return true;
 }
 
-SCRIPT_API(socket_errno, int()){
-    #ifdef _WIN32
-        return WSAGetLastError();
-    #else
-        return errno;
-    #endif
+SCRIPT_API(socket_errno, int(int socket_handle)){
+    Socket* sock = socket_manager->get(socket_handle);
+    if(sock == nullptr) return -1;
+
+    return sock->getLastError();
 }
