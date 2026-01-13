@@ -30,6 +30,12 @@ SCRIPT_API(socket_create, int(int type)){
     return pawnHandle;
 }
 
+SCRIPT_API(socket_destroy, int(int socket_handle)){
+    Socket* sock = socket_manager->get(socket_handle);
+    if(sock == nullptr) return -1;
+    socket_manager->destroy(socket_handle);
+    return 0;
+}
 
 SCRIPT_API(socket_bind, int(int socket_handle, int port)){
     Socket* sock = socket_manager->get(socket_handle);
