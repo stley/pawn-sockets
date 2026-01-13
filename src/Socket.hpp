@@ -36,6 +36,8 @@
 inline bool isValidSocket(SOCKET h);
 
 
+extern int GetSocketError();
+
 class Socket{
 public:
     enum class Type {
@@ -87,6 +89,7 @@ public:
 
     SocketState state();
 
+    int getLastError();
 private:
 
     sockaddr_in socketConfig;
@@ -96,4 +99,5 @@ private:
 
     int protocol_ = 0;
     SocketState state_ = SocketState::Invalid;
+    int last_error;
 };

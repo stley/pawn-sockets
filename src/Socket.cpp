@@ -9,6 +9,13 @@ inline bool isValidSocket(SOCKET h){
     #endif
 }
 
+int GetSocketError(){
+    #ifdef _WIN32
+        return WSAGetLastError();
+    #else
+        return errno;
+    #endif
+}
 
 Socket::Socket(int type) :
 handle_(0),
@@ -40,7 +47,7 @@ state_(SocketState::Invalid)
 
     handle_ = socket(AF_INET, sockType, protocol);
 
-    if(!isValidSocket(handle_))
+    if(isValidSocket(handle_))
         state_ = SocketState::Created;
 }
 
@@ -70,24 +77,13 @@ int Socket::Bind(uint16_t port){
 
     int rt = 0;
     rt = ::bind(handle_, (SOCKADDR*) &socketConfig, sizeof(socketConfig));
-    #ifdef _WIN32
 
     if(rt == SOCKET_ERROR){
         std::memset(&socketConfig, 0, sizeof(socketConfig));
         state_ = SocketState::Error;
-        getCore()->printLn("socket_bind failed: %d | OS HANDLE: %d", WSAGetLastError(), handle_);
+        getCore()->printLn("Socket::Bind failed: %d | OS HANDLE: %d", GetSocketError(), handle_);
     }
 
-    #else
-
-    if(rt == -1){
-        std::memset(&socketConfig, 0, sizeof(socketConfig));
-        state_ = SocketState::Error;
-        //error
-
-    }
-
-    #endif
     else
         state_ = SocketState::Bound;
 
@@ -113,7 +109,7 @@ bool Socket::Connect(const std::string& ip, uint16_t port){
     if(ret == SOCKET_ERROR){
         state_ = SocketState::Error;
         //error
-        getCore()->printLn("socket_connect failed: %d | OS HANDLE: %d", WSAGetLastError(), handle_);
+        getCore()->printLn("Socket::Connect failed: %d | OS HANDLE: %d |", GetSocketError(), handle_);
         return false;
     }
     else{
@@ -125,23 +121,43 @@ bool Socket::Connect(const std::string& ip, uint16_t port){
 
 int Socket::Listen(int backlog){
     if(!isValidSocket(handle_)) return -1;
-    return listen(handle_, backlog);
+    int ret_val = listen(handle_, backlog);
+    if(ret_val == SOCKET_ERROR){
+        state_ = SocketState::Error;
+        last_error = GetSocketError();
+        getCore()->printLn("sendto() %d - SOCKET ERROR: %d", ret_val, GetSocketError());
+    }
+    else state_ = SocketState::Listening;
+    return ret_val; 
 }
 
 int Socket::Send(const void* data, size_t size){
     if(!isValidSocket(handle_)) return -1;
 
-    return ::send(handle_, reinterpret_cast<const char*>(data), size, 0);
+    int ret_val = ::send(handle_, reinterpret_cast<const char*>(data), size, 0);
+    if(ret_val == SOCKET_ERROR){
+        state_ = SocketState::Error;
+        last_error = GetSocketError();
+    }
+
+    return ret_val;
 
 }
 int Socket::Recv(void* buffer, size_t size){
     if(!isValidSocket(handle_)) return -1;
-    return ::recv(handle_, reinterpret_cast<char*>(buffer), size, 0);
+    int ret_val = ::recv(handle_, reinterpret_cast<char*>(buffer), size, 0);
+    if(ret_val == SOCKET_ERROR){
+        state_ = SocketState::Error;
+        last_error = GetSocketError();
+    }
+    return ret_val;
 }
 int Socket::SendTo(const void* data, size_t size, const std::string& ip, uint16_t port){
     
     if(!isValidSocket(handle_)) return -1;
     sockaddr_in to;
+
+    std::memset(&to, 0, sizeof(to));
 
     to.sin_family = AF_INET;
 
@@ -149,16 +165,21 @@ int Socket::SendTo(const void* data, size_t size, const std::string& ip, uint16_
 
     in_addr ip_addr;
     inet_pton(AF_INET, ip.c_str(), &ip_addr);
-    //ip_addr.s_addr = ::inet_addr(ip.c_str());
+    
 
     to.sin_addr = ip_addr;
 
     
-    int ret_value = ::sendto(handle_, reinterpret_cast<const char*>(data), size, 0, reinterpret_cast<SOCKADDR*>(&to), sizeof(to));
+    int ret_val = ::sendto(handle_, reinterpret_cast<const char*>(data), size, 0, reinterpret_cast<SOCKADDR*>(&to), sizeof(to));
+    
 
-    //if(ret_value == SOCKET_ERROR) getCore()->printLn("%d", WSAGetLastError());
-    getCore()->printLn("sendto() %d - WSAERROR: %d", ret_value, WSAGetLastError());
-    return ret_value;
+    if(ret_val == SOCKET_ERROR){
+        state_ = SocketState::Error;
+        last_error = GetSocketError();
+        getCore()->printLn("sendto() %d - SOCKET ERROR: %d", ret_val, GetSocketError());
+    }
+
+    return ret_val;
 }
 
 int Socket::RecvFrom(void* buffer, size_t size, std::string& outIp, uint16_t& outPort){
@@ -170,8 +191,11 @@ int Socket::RecvFrom(void* buffer, size_t size, std::string& outIp, uint16_t& ou
 
     int ret_val = ::recvfrom(handle_, reinterpret_cast<char*>(buffer), size, 0, &Recipient, &theLen);
     
-    
-    //if(ret_val == SOCKET_ERROR) 
+    if(ret_val == SOCKET_ERROR){
+        state_ = SocketState::Error;
+        last_error = GetSocketError();
+    }
+
 
     //sockaddr_in receivedFrom = reinterpret_cast<sockaddr_in>(Recipient);
     
@@ -188,14 +212,22 @@ int Socket::RecvFrom(void* buffer, size_t size, std::string& outIp, uint16_t& ou
     return ret_val;
 }
 
-SOCKET Socket::getOSHandle(){
+SOCKET Socket::getOSHandle()
+{
     return handle_;
 }
 
-int Socket::protocol(){
+int Socket::protocol()
+{
     return protocol_;
 }
 
-Socket::SocketState Socket::state(){
+Socket::SocketState Socket::state()
+{
     return state_;
+}
+
+int Socket::getLastError()
+{
+    return last_error;
 }
