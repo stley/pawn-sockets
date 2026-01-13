@@ -61,9 +61,7 @@ int SocketManager::create(int type){
 }
 
 Socket* SocketManager::get(SocketHandle h){
-    the_core->printLn("Script tries to get pointer to socket using pawn handle");
     if(h > socketList.size()-1 || !socketList[h]) return nullptr;
-    the_core->printLn("Pawn Handle for Socket is VALID.");
     return socketList[h].get();
 }
 
