@@ -24,8 +24,10 @@
 
 #ifdef _WIN32
     #define socket_close(s) closesocket(s)
+    #define GetSocketError() WSAGetLastError()
 #else
     #define socket_close(s) close(s)
+    #define GetSocketError() (errno)
     using int = SOCKET;
     constexpr SOCKET INVALID_SOCKET = -1;
     constexpr int SOCKET_ERROR = -1;
@@ -36,7 +38,6 @@
 inline bool isValidSocket(SOCKET h);
 
 
-extern int GetSocketError();
 
 class Socket{
 public:

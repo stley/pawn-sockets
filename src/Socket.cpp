@@ -9,13 +9,6 @@ inline bool isValidSocket(SOCKET h){
     #endif
 }
 
-int GetSocketError(){
-    #ifdef _WIN32
-        return WSAGetLastError();
-    #else
-        return errno;
-    #endif
-}
 
 Socket::Socket(int type) :
 handle_(0),
