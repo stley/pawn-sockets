@@ -19,6 +19,7 @@ add_definitions(
 
 add_library(${PROJECT_NAME} SHARED 
 src/main.cpp
+src/natives.cpp
 src/SocketManager.cpp
 src/Socket.cpp
 )
