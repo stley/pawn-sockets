@@ -1,6 +1,6 @@
+#pragma once
 // Required for most of open.mp.
 #include <sdk.hpp>
-
 // Include the pawn component information.
 #include <Server/Components/Pawn/pawn.hpp>
 
@@ -19,7 +19,7 @@ extern ICore* core_;
 
 std::vector<AMX*> g_amxScripts;
 
-extern std::unique_ptr<SocketManager> socket_manager;
+//extern std::unique_ptr<SocketManager> socket_manager;
 
 
 class PawnSockets : public IComponent, public CoreEventHandler, public PawnEventHandler
@@ -55,7 +55,10 @@ public:
 
 	void onAmxUnload(IPawnScript& script) override
     {
-
+        g_amxScripts.erase(
+            std::remove(g_amxScripts.begin(), g_amxScripts.end(), script.GetAMX()),
+            g_amxScripts.end()
+        );
     }
 
     void onInit(IComponentList* components) override { 
