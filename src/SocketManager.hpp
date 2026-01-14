@@ -16,6 +16,8 @@
 using SocketHandle = uint32_t;
 
 
+
+
 struct ProcessedMessage {
     size_t recvLen = -1;
     std::string fromIp;
@@ -66,3 +68,4 @@ private:
     std::vector<QueuedResponse> Queue;
 };
 
+extern std::unique_ptr<SocketManager> socket_manager;

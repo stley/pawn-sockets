@@ -1,9 +1,11 @@
 #include "core.hpp"
 #include "SocketManager.hpp"
 
-
+std::unique_ptr<SocketManager> socket_manager;
 
 #include <chrono>
+
+
 
 void SocketManager::start(ICore* core){
     the_core = core;
@@ -31,7 +33,7 @@ void SocketManager::start(ICore* core){
 }
 
 void SocketManager::stop(){
-    if(the_core != nullptr) the_core->printLn("Socket Manager stopped.");    
+    if(the_core != nullptr) the_core->printLn("Socket Manager stopped.");
     running_ = false;
 
     for(SocketHandle i = 0; i < socketList.size(); i++){
@@ -95,10 +97,10 @@ void SocketManager::run(){
         timeval time;
         time.tv_sec = 0;
         time.tv_usec = 500000;
-        //the_core->printLn("worker thread checking for new responses...");
+
         readyCount = ::select(0, &checkset, nullptr, nullptr, &time);
         if(!readyCount) continue;
-        //the_core->printLn("%d", readyCount);
+
         for(int s1 = 0; s1 < socketList.size(); s1++){
             Socket* theSocket = socketList[s1].get();
 
