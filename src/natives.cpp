@@ -81,5 +81,5 @@ SCRIPT_API(socket_errno, int(int socket_handle)){
     Socket* sock = socket_manager->get(socket_handle);
     if(sock == nullptr) return -1;
 
-    return sock->getLastError();
+    return sock->GetLastError();
 }

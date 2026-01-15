@@ -48,7 +48,8 @@ void SocketManager::stop(){
 }
 
 int SocketManager::create(int type){
-    
+    std::lock_guard<std::mutex> lock(socketList_mutex);
+
 
     for(int i = 0; i < socketList.size(); i++){
         if(socketList[i] == nullptr){
@@ -63,11 +64,13 @@ int SocketManager::create(int type){
 }
 
 Socket* SocketManager::get(SocketHandle h){
-    if(h > socketList.size()-1 || !socketList[h]) return nullptr;
+    std::lock_guard<std::mutex> lock(socketList_mutex);
+    if(h >= socketList.size()-1 || !socketList[h]) return nullptr;
     return socketList[h].get();
 }
 
 void SocketManager::destroy(SocketHandle h){
+    std::lock_guard<std::mutex> lock(socketList_mutex);
     if(h > socketList.size()-1 || !socketList[h]) return;
 
     socketList[h].reset();
@@ -83,70 +86,136 @@ void SocketManager::run(){
         //this is running!
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         
-        fd_set checkset;
-        FD_ZERO(&checkset);
+        fd_set readSet;
+        FD_ZERO(&readSet);
+        fd_set writeSet;
+        FD_ZERO(&writeSet);
 
-        for(int s = 0; s < socketList.size(); s++){
-            Socket* theSocket = socketList[s].get();
-            if(theSocket != nullptr)
-            {
-                FD_SET(theSocket->getOSHandle(), &checkset);
-            }            
+        int max_FD = 0;
+
+        {
+            std::lock_guard<std::mutex> lock(socketList_mutex);
+            for(int s = 0; s < socketList.size(); s++){
+                Socket* theSocket = socketList[s].get();
+                if(theSocket != nullptr)
+                {
+                    if(theSocket->GetState() == Socket::SocketState::Connecting){
+                        FD_SET(theSocket->GetOSHandle(), &writeSet);
+                        max_FD++;
+                        continue;
+                    }
+                    if(theSocket->GetState() == Socket::SocketState::Connected || theSocket->GetProtocol() == 1){
+                        FD_SET(theSocket->GetOSHandle(), &readSet);
+                        max_FD++;
+                    }
+
+
+                }            
+            }
         }
         int readyCount;
         timeval time;
         time.tv_sec = 0;
         time.tv_usec = 500000;
 
-        readyCount = ::select(0, &checkset, nullptr, nullptr, &time);
+        
+
+        readyCount = ::select(max_FD, &readSet, &writeSet, nullptr, &time);
         if(!readyCount) continue;
 
-        for(int s1 = 0; s1 < socketList.size(); s1++){
-            Socket* theSocket = socketList[s1].get();
+        {
+            std::lock_guard<std::mutex> lock(socketList_mutex);
+            for(int s1 = 0; s1 < socketList.size(); s1++)
+            {
+                Socket* theSocket = socketList[s1].get();
+                if(theSocket == nullptr) continue;
+                
+                SOCKET OSHandle = theSocket->GetOSHandle();
+                if(FD_ISSET(OSHandle, &writeSet))
+                {
+                    //Socket is trying to connect to somewhere
+                    if(theSocket->GetState() == Socket::SocketState::Connecting){
+                        int err = 0;
+                        socklen_t len = sizeof(err);
+                        ::getsockopt(theSocket->GetOSHandle(), SOL_SOCKET, SO_ERROR, (char*)(&err), &len);
+                        ConnectionResponse response;
+                        response.pawn_socket_origin = s1;
+                        response.success = (err == 0);
+                        if(!err) theSocket->SetState(Socket::SocketState::Connected);
+                        else
+                        {
+                            theSocket->SetState(Socket::SocketState::Error);
+                            theSocket->SetLastError(err);
+                        }
 
-            if(theSocket != nullptr){
-                QueuedResponse response;
-                SOCKET OSHandle = theSocket->getOSHandle();
-                if(FD_ISSET(OSHandle, &checkset)){
-                    switch(theSocket->protocol()){
-                        case 1: { //UDP 
-                            response.result.recvLen = theSocket->RecvFrom(response.result.buffer, sizeof(response.result.buffer), response.result.fromIp, response.result.fromPort);
-                            break;
-                        }
-                        case 2: { //TCP
-                            response.result.recvLen = theSocket->Recv(response.result.buffer, sizeof(response.result.buffer));
-                            break;
-                        }
+                        ConnectQueue.push(response);
 
                     }
-                    response.pawn_socket_origin = s1;
-                    response.processed = false;
-                    Queue.push_back(response);
+                }
+                if(FD_ISSET(OSHandle, &readSet))
+                {
+                    //Data incoming
+                    
+
+                    switch(theSocket->GetProtocol())
+                    {
+                        case 1: 
+                        { //UDP 
+                            IncomingData response;
+                            response.result.recvLen = theSocket->RecvFrom(response.result.buffer, sizeof(response.result.buffer), response.result.fromIp, response.result.fromPort);
+                            response.pawn_socket_origin = s1;
+                            IncomingQueue.push(response);
+                            break;
+                        }
+                        case 2: 
+                        { //TCP
+                            if(theSocket->GetState() == Socket::SocketState::Connected){
+                                IncomingData response;
+                                response.result.recvLen = theSocket->Recv(response.result.buffer, sizeof(response.result.buffer));
+                                if(response.result.recvLen != 0) //Disconnected
+                                {
+                                    response.pawn_socket_origin = s1;
+                                    IncomingQueue.push(response);
+                                }
+                                else
+                                {
+                                    theSocket->SetState(Socket::SocketState::Disconnected);
+                                    DropQueue.push(s1); 
+                                }
+                                
+                            }                
+                            break;
+                        }
+                    }
+                    
                 }
             }
-
         }
         continue;
     }
 }
 
-void SocketManager::dispatch(){
-    if(Queue.empty()) return;
-    for(int s = 0; s < Queue.size(); s++)
-    {
+void SocketManager::dispatch()
+{
+    //handling incoming data
+    
+    if(!IncomingQueue.empty()){
+        IncomingData* response = &IncomingQueue.front();
 
-        QueuedResponse* response = &Queue[s];
-
-        if(response->processed == true) continue;
-
-        Socket* theSocket = SocketManager::get(response->pawn_socket_origin);
-
-        if(theSocket == nullptr)
-            continue;
+        Socket* theSocket = nullptr;
+        int protocol;
+        {
+            std::lock_guard<std::mutex> lock(socketList_mutex);
+            if(response->pawn_socket_origin < socketList.size() && 
+               socketList[response->pawn_socket_origin]) {
+                theSocket = socketList[response->pawn_socket_origin].get();
+                if(theSocket == nullptr) IncomingQueue.pop();
+                protocol = theSocket->GetProtocol();
+            }
+        }
         
+
         int pawnHandle = response->pawn_socket_origin;
-                    
-        
 
         int callIdx;
 
@@ -158,7 +227,7 @@ void SocketManager::dispatch(){
             amx_buffer[i] = response->result.buffer[i];
 
         
-        switch(theSocket->protocol()){
+        switch(protocol){
         case 1: 
             { //UDP 
                 for(int scr = 0; scr < g_amxScripts.size(); scr++)
@@ -169,10 +238,7 @@ void SocketManager::dispatch(){
                     ;
                     AMX* theScript = g_amxScripts[scr];
                     if(theScript == nullptr) continue;
-                    if(response->callback.empty())
-                        amx_FindPublic(theScript, "OnIncomingUDP", &callIdx);
-                    else
-                        amx_FindPublic(theScript, response->callback.c_str(), &callIdx);
+                    if(amx_FindPublic(theScript, "OnIncomingUDP", &callIdx) != AMX_ERR_NONE) continue;
 
 
                     //forward OnIncomingUDP(Socket:id, const data[], data_len, const remote_client_ip[], remote_client_port);
@@ -189,7 +255,8 @@ void SocketManager::dispatch(){
                     break;
                 }
             }
-            case 2: { //TCP
+            case 2: 
+            { //TCP
                 for(int scr = 0; scr < g_amxScripts.size(); scr++)
                 {
                     cell
@@ -197,11 +264,9 @@ void SocketManager::dispatch(){
                     ;
                     AMX* theScript = g_amxScripts[scr];
                     if(theScript == nullptr) continue;
-                    if(response->callback.empty())
-                        amx_FindPublic(theScript, "OnIncomingTCP", &callIdx);
-                    else
-                        amx_FindPublic(theScript, response->callback.c_str(), &callIdx);
-            
+                    if(amx_FindPublic(theScript, "OnIncomingTCP", &callIdx) != AMX_ERR_NONE) continue;
+                    
+                
                     //forward OnIncomingTCP(Socket:id, const data[], data_len);
                     //data_len
                     amx_Push(theScript, (cell)response->result.recvLen);
@@ -218,14 +283,54 @@ void SocketManager::dispatch(){
                 }
             }
         }
-        response->processed = true;
-        
+        IncomingQueue.pop();
     }
     
-    Queue.erase(std::remove_if(Queue.begin(), Queue.end(),
-        [](const QueuedResponse& r) {
-            return r.processed;
-        }),
-        Queue.end()
-    );
+
+
+    if(!ConnectQueue.empty())
+    {
+        ConnectionResponse* conn_response = &ConnectQueue.front();
+        int callIdx;
+        for(int scr = 0; scr < g_amxScripts.size(); scr++)
+        {
+            AMX* theScript = g_amxScripts[scr];
+            if(theScript == nullptr) continue;
+
+            if(amx_FindPublic(theScript, "OnSocketConnect", &callIdx) != AMX_ERR_NONE) continue;
+
+
+            amx_Push(theScript, (cell)conn_response->success);
+            amx_Push(theScript, (cell)conn_response->pawn_socket_origin);
+
+            amx_Exec(theScript, NULL, callIdx);
+
+        }
+
+        ConnectQueue.pop();
+    }    
+
+
+    if(!DropQueue.empty())
+    {
+        SocketHandle theHandle = DropQueue.front();
+
+        int callIdx;
+        for(int scr = 0; scr < g_amxScripts.size(); scr++)
+        {
+            AMX* theScript = g_amxScripts[scr];
+            if(theScript == nullptr) continue;
+
+            if(amx_FindPublic(theScript, "OnSocketDisconnect", &callIdx) != AMX_ERR_NONE) continue;
+
+            amx_Push(theScript, (cell)theHandle);
+
+            amx_Exec(theScript, NULL, callIdx);
+
+        }
+
+        DropQueue.pop();
+    }
+
+    return;
 }

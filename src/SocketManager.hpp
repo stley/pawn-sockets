@@ -4,21 +4,21 @@
 
 // Include the pawn component information.
 #include <Server/Components/Pawn/pawn.hpp>
-
-#include <vector>
-
-#include <thread>
-
 #include "Socket.hpp"
 
+#include <vector>
+#include <thread>
 #include <atomic>
+#include <queue>
+#include <mutex>
 
 using SocketHandle = uint32_t;
 
 
 
 
-struct ProcessedMessage {
+struct ProcessedMessage 
+{
     size_t recvLen = -1;
     std::string fromIp;
     uint16_t fromPort = -1;
@@ -26,12 +26,23 @@ struct ProcessedMessage {
 
 };
 
-struct QueuedResponse {
+/*struct ClientInfo
+{
+    std::string fromIp;
+    uint16_t fromPort = -1;
+};*/
+
+struct ConnectionResponse {
     int pawn_socket_origin = -1;
-    AMX* machine = nullptr;
+    //AMX* machine = nullptr;
+    bool success = false;
+};
+
+struct IncomingData {
+    int pawn_socket_origin = -1;
+    //AMX* machine = nullptr;
     std::string callback;
     ProcessedMessage result;
-    bool processed = false;
     //int timeout_ms = 500;
 };
 
@@ -60,12 +71,18 @@ private:
     ICore* the_core;
 
     std::vector<std::unique_ptr<Socket>> socketList;
+    std::mutex socketList_mutex;
+
     
     std::atomic<bool> running_ = false;
 
     std::thread worker_thread;
 
-    std::vector<QueuedResponse> Queue;
+    std::queue<SocketHandle> DropQueue;
+
+    std::queue<ConnectionResponse> ConnectQueue;
+
+    std::queue<IncomingData> IncomingQueue;
 };
 
 extern std::unique_ptr<SocketManager> socket_manager;

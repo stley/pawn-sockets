@@ -28,7 +28,7 @@
 #else
     #define socket_close(s) close(s)
     #define GetSocketError() (errno)
-    using int = SOCKET;
+    using  SOCKET = int;
     constexpr SOCKET INVALID_SOCKET = -1;
     constexpr int SOCKET_ERROR = -1;
 #endif
@@ -52,6 +52,8 @@ public:
         Closed,
         Bound,
         Listening,
+        Disconnected,
+        Connecting,
         Connected,
         Invalid,
         Error
@@ -82,15 +84,19 @@ public:
     ssize_t RecvFrom(void* buffer, size_t size, std::string& outIp, uint16_t& outPort);
 
 
-    SOCKET getOSHandle();
+    SOCKET GetOSHandle();
 
     void Close();
 
-    int protocol();
+    int GetProtocol();
 
-    SocketState state();
+    SocketState GetState();
 
-    int getLastError();
+    void SetState(SocketState State);
+
+    int GetLastError();
+
+    void SetLastError(int error);
 private:
 
     sockaddr_in socketConfig;

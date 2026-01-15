@@ -25,3 +25,5 @@ native socket_errno(Socket:id);
 
 forward OnIncomingUDP(Socket:id, const data[], data_len, const remote_client_ip[], remote_client_port);
 forward OnIncomingTCP(Socket:id, const data[], data_len);
+forward OnSocketConnect(Socket:id, bool:success);
+forward OnSocketDisconnect(Socket:id);
