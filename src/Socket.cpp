@@ -40,6 +40,10 @@ state_(SocketState::Invalid)
 
     handle_ = socket(AF_INET, sockType, protocol);
 
+    u_long non_blocking = 1;
+
+    ioctlsocket(handle_, FIONBIO, &non_blocking);
+
     if(isValidSocket(handle_))
         state_ = SocketState::Created;
 }
@@ -59,6 +63,8 @@ Socket::~Socket(){
 
 int Socket::Bind(uint16_t port){
     if(!isValidSocket(handle_)) return -1;
+    if(state_ == SocketState::Invalid) return -1;
+
 
     socketConfig.sin_family = AF_INET;
     socketConfig.sin_port = htons(port);
@@ -85,6 +91,7 @@ int Socket::Bind(uint16_t port){
 
 bool Socket::Connect(const std::string& ip, uint16_t port){
     if(!isValidSocket(handle_)) return false;
+    if(state_ == SocketState::Invalid) return -1;
 
     int ret = 0;
     
@@ -99,14 +106,19 @@ bool Socket::Connect(const std::string& ip, uint16_t port){
 
     ret = connect(handle_, (SOCKADDR*) &socketConfig, sizeof(socketConfig));
 
-    if(ret == SOCKET_ERROR){
+    #ifdef _WIN32
+        if(ret == SOCKET_ERROR && GetSocketError() != WSAEWOULDBLOCK) //WSAEWOULDBLOCK - 10035
+    #else
+        if(ret == SOCKET_ERROR && GetSocketError() != EINPROGRESS)
+    #endif
+    {
         state_ = SocketState::Error;
         //error
         getCore()->printLn("Socket::Connect failed: %d | OS HANDLE: %d |", GetSocketError(), handle_);
         return false;
     }
     else{
-        state_ = SocketState::Connected;
+        state_ = SocketState::Connecting;
     }
 
     return true;
@@ -114,6 +126,8 @@ bool Socket::Connect(const std::string& ip, uint16_t port){
 
 int Socket::Listen(int backlog){
     if(!isValidSocket(handle_)) return -1;
+    if(state_ == SocketState::Invalid) return -1;
+
     int ret_val = listen(handle_, backlog);
     if(ret_val == SOCKET_ERROR){
         state_ = SocketState::Error;
@@ -126,6 +140,7 @@ int Socket::Listen(int backlog){
 
 int Socket::Send(const void* data, size_t size){
     if(!isValidSocket(handle_)) return -1;
+    if(state_ == SocketState::Invalid) return -1;
 
     int ret_val = ::send(handle_, reinterpret_cast<const char*>(data), size, 0);
     if(ret_val == SOCKET_ERROR){
@@ -138,6 +153,7 @@ int Socket::Send(const void* data, size_t size){
 }
 int Socket::Recv(void* buffer, size_t size){
     if(!isValidSocket(handle_)) return -1;
+    if(state_ == SocketState::Invalid) return -1;
     int ret_val = ::recv(handle_, reinterpret_cast<char*>(buffer), size, 0);
     if(ret_val == SOCKET_ERROR){
         state_ = SocketState::Error;
@@ -148,6 +164,7 @@ int Socket::Recv(void* buffer, size_t size){
 int Socket::SendTo(const void* data, size_t size, const std::string& ip, uint16_t port){
     
     if(!isValidSocket(handle_)) return -1;
+    if(state_ == SocketState::Invalid) return -1;
     sockaddr_in to;
 
     std::memset(&to, 0, sizeof(to));
@@ -202,22 +219,30 @@ int Socket::RecvFrom(void* buffer, size_t size, std::string& outIp, uint16_t& ou
     return ret_val;
 }
 
-SOCKET Socket::getOSHandle()
+SOCKET Socket::GetOSHandle()
 {
     return handle_;
 }
 
-int Socket::protocol()
+int Socket::GetProtocol()
 {
     return protocol_;
 }
 
-Socket::SocketState Socket::state()
+Socket::SocketState Socket::GetState()
 {
     return state_;
 }
 
-int Socket::getLastError()
+void Socket::SetState(SocketState State){
+    state_ = State;
+}
+
+int Socket::GetLastError()
 {
     return last_error;
+}
+
+void Socket::SetLastError(int error){
+    last_error = error;
 }
